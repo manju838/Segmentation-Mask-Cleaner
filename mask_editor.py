@@ -203,11 +203,7 @@ class MaskEditorApp:
             status_text = " | ".join(status_parts)
         
         self.status_label.config(text=status_text)
-    
-    
-    
-    
-    
+        
     def create_toolbar(self):
         """Create the toolbar with various editing tools and options."""
         # Main toolbar frame
@@ -566,7 +562,6 @@ class MaskEditorApp:
 
         self.update_display()
     
-    
     # Add this new method to handle the mask-only toggle
     def toggle_mask_only(self):
         """Toggle between normal overlay view and mask-only view."""
@@ -717,117 +712,7 @@ class MaskEditorApp:
         self.brush_size = int(float(value))
         # Update cursor if the mouse is over the canvas
         self.update_cursor(None)
-    
-    # def update_cursor(self, event):
-    #     """
-    #     Update the cursor appearance based on the current tool and brush size.
-    #     Creates a circular indicator for brush tools.
-    #     """
-    #     if self.original_image is None or self.mask_image is None:
-    #         return
-            
-    #     # Delete previous cursor indicator if it exists
-    #     if self.cursor_indicator:
-    #         self.canvas.delete(self.cursor_indicator)
-    #         self.cursor_indicator = None
         
-    #     if event is None:
-    #         return
-            
-    #     # Get canvas coordinates
-    #     canvas_x = self.canvas.canvasx(event.x)
-    #     canvas_y = self.canvas.canvasy(event.y)
-        
-    #     # Only show cursor indicator for brush and line tools
-    #     if self.current_tool in ["brush", "line"]:
-    #         # Calculate brush radius in display scale
-    #         brush_radius = self.brush_size * self.display_scale
-            
-    #         # Create a filled circular indicator with translucency
-    #         self.cursor_indicator = self.canvas.create_oval(
-    #             canvas_x - brush_radius, canvas_y - brush_radius,
-    #             canvas_x + brush_radius, canvas_y + brush_radius,
-    #             outline="#444444", width=1, fill="#444444", stipple="gray50"
-    #         )
-    #     elif self.current_tool == "polygon":
-    #         # Check if hovering over a vertex
-    #         self.hover_vertex = None
-    #         for i, (px, py) in enumerate(self.polygon_points):
-    #             # Check if mouse is near this vertex
-    #             if abs(canvas_x - px) < 15 and abs(canvas_y - py) < 15:
-    #                 self.hover_vertex = i
-                    
-    #                 # Highlight the vertex
-    #                 self.canvas.itemconfig(
-    #                     self.polygon_vertices[i],
-    #                     fill="yellow",
-    #                     outline="yellow"
-    #                 )
-    #             else:
-    #                 # Reset vertex appearance if it was previously highlighted
-    #                 if i < len(self.polygon_vertices):
-    #                     self.canvas.itemconfig(
-    #                         self.polygon_vertices[i], 
-    #                         fill="red" if i > 0 else "green",
-    #                         outline="white"
-    #                     )
-            
-    #         # Check if hovering near the first point (for closing)
-    #         if len(self.polygon_points) >= 3 and not self.polygon_closed:
-    #             first_x, first_y = self.polygon_points[0]
-    #             distance = ((canvas_x - first_x)**2 + (canvas_y - first_y)**2)**0.5
-                
-    #             if distance < 20:  # Increased detection radius
-    #                 # Highlight first point to indicate closing is possible
-    #                 self.canvas.itemconfig(
-    #                     self.polygon_vertices[0],
-    #                     fill="yellow",
-    #                     outline="black",
-    #                     width=2
-    #                 )
-                    
-    #                 # Add temporary indicator to show potential closing action
-    #                 if not hasattr(self, 'close_indicator') or not self.close_indicator:
-    #                     self.close_indicator = self.canvas.create_text(
-    #                         first_x, first_y - 15,
-    #                         text="Click to close",
-    #                         fill="white",
-    #                         font=('Arial', 8)
-    #                     )
-                    
-    #                 # Change cursor to indicate closing action
-    #                 self.canvas.config(cursor="hand2")
-                    
-    #                 self.close_option_active = True  # Set flag to indicate closing option is active
-    #             else:
-    #                 # Reset first vertex appearance
-    #                 if len(self.polygon_vertices) > 0:
-    #                     self.canvas.itemconfig(
-    #                         self.polygon_vertices[0],
-    #                         fill="green",
-    #                         outline="white",
-    #                         width=1
-    #                     )
-                    
-    #                 # Remove temporary closing indicator
-    #                 if hasattr(self, 'close_indicator') and self.close_indicator:
-    #                     self.canvas.delete(self.close_indicator)
-    #                     self.close_indicator = None
-                    
-    #                 # Reset cursor
-    #                 self.canvas.config(cursor="crosshair")
-    #                 self.close_option_active = False  # Reset flag
-    #         else:
-    #             # Default polygon cursor
-    #             self.canvas.config(cursor="crosshair")
-    #             self.close_option_active = False  # Ensure flag is reset
-    #     elif self.current_tool == "select":
-    #         # Set crosshair cursor for select tool
-    #         self.canvas.config(cursor="crosshair")
-    #     else:
-    #         # Default cursor
-    #         self.canvas.config(cursor="")
-    
     def update_cursor(self, event):
         """
         Update the cursor appearance based on the current tool and brush size.
@@ -936,7 +821,6 @@ class MaskEditorApp:
         else:
             # Default cursor
             self.canvas.config(cursor="")
-    
     
     def set_overlay(self, alpha):
         """Set the transparency level of the mask overlay."""
@@ -1247,118 +1131,6 @@ class MaskEditorApp:
         
         # Clear flag
         self._highlighting = False
-    
-    # def on_mouse_down(self, event):
-    #     """Handle mouse button press events."""
-    #     if self.original_image is None or self.mask_image is None:
-    #         return
-        
-    #     # Get canvas coordinates
-    #     canvas_x = self.canvas.canvasx(event.x)
-    #     canvas_y = self.canvas.canvasy(event.y)
-        
-    #     # Check if click is within the image
-    #     if canvas_x < self.display_offset_x or canvas_y < self.display_offset_y or \
-    #        canvas_x >= self.display_offset_x + self.photo_image.width() or \
-    #        canvas_y >= self.display_offset_y + self.photo_image.height():
-    #         return
-        
-    #     # Convert to image coordinates
-    #     image_x, image_y = self.display_to_image_coords(canvas_x, canvas_y)
-        
-    #     self.is_drawing = True
-    #     self.last_x, self.last_y = image_x, image_y
-        
-    #     if self.current_tool == "brush":
-    #         self.save_undo_state()
-    #         self.draw_brush(image_x, image_y)
-    #         self.update_display()
-    #     elif self.current_tool == "select":
-    #         self.selection_start = (image_x, image_y)
-            
-    #         # Clear previous selection
-    #         if self.selection_rect:
-    #             self.canvas.delete(self.selection_rect)
-            
-    #         # Start new selection rect
-    #         display_x, display_y = self.image_to_display_coords(image_x, image_y)
-    #         self.selection_rect = self.canvas.create_rectangle(
-    #             display_x, display_y, display_x, display_y,
-    #             outline='yellow', width=2, dash=(4, 4)
-    #         )
-    #     elif self.current_tool == "line":
-    #         self.save_undo_state()
-    #         # Start a new line
-    #         self.line_start = (image_x, image_y)
-            
-    #         # Create a temporary line on the canvas for visual feedback
-    #         display_x, display_y = self.image_to_display_coords(image_x, image_y)
-    #         self.temp_line = self.canvas.create_line(
-    #             display_x, display_y, display_x, display_y,
-    #             fill='yellow', width=2
-    #         )
-    #     elif self.current_tool == "polygon":
-    #         # Check if clicking on an existing vertex for dragging
-    #         if self.hover_vertex is not None:
-    #             self.active_vertex = self.hover_vertex
-    #             return
-            
-    #         # Improved polygon closing check
-    #         if len(self.polygon_points) >= 3 and not self.polygon_closed and self.close_option_active:
-    #             print("Closing polygon based on close_option_active flag")
-                
-    #             # Use the first point's coordinates to ensure proper closure
-    #             last_pt = self.polygon_points[-1]
-    #             first_pt = self.polygon_points[0]
-                
-    #             line_id = self.canvas.create_line(
-    #                 last_pt[0], last_pt[1], 
-    #                 first_pt[0], first_pt[1],
-    #                 fill="yellow", width=2
-    #             )
-    #             self.polygon_lines.append(line_id)
-    #             self.polygon_closed = True
-                
-    #             # Create the mask
-    #             self.polygon_region = self.create_polygon_mask()
-                
-    #             # Update status
-    #             self.status_label.config(text="Polygon closed successfully. Use Fill/Delete to modify.")
-                
-    #             # Clean up closing indicator
-    #             if hasattr(self, 'close_indicator') and self.close_indicator:
-    #                 self.canvas.delete(self.close_indicator)
-    #                 self.close_indicator = None
-                
-    #             self.close_option_active = False  # Reset flag
-                
-    #             # Manually update the display
-    #             self._highlighting = True  # Set flag to prevent recursion
-    #             self.update_display()
-    #             self._highlighting = False
-    #             return
-            
-    #         # If the polygon is closed, start a new one
-    #         if self.polygon_closed:
-    #             self.clear_polygon_selection()
-            
-    #         # Add a new point
-    #         self.polygon_points.append((canvas_x, canvas_y))
-            
-    #         # Add a vertex marker
-    #         is_first = len(self.polygon_points) == 1
-    #         vertex_id = self.create_vertex_marker(canvas_x, canvas_y, is_first)
-    #         self.polygon_vertices.append(vertex_id)
-            
-    #         # If this is the first point, no line to draw yet
-    #         if len(self.polygon_points) > 1:
-    #             # Draw line from previous point to this point
-    #             last_x, last_y = self.polygon_points[-2]
-    #             line_id = self.canvas.create_line(
-    #                 last_x, last_y, canvas_x, canvas_y,
-    #                 fill="yellow", width=2
-    #             )
-    #             self.polygon_lines.append(line_id)
     
     def on_mouse_down(self, event):
         """Handle mouse button press events."""
