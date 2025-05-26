@@ -36,6 +36,7 @@ class MaskEditorApp:
         self.overlay_alpha = 0.5
         
         self.show_mask_only = False  # New flag for mask-only view
+        self.show_image_only = False # New flag for image-only view
         
         self.selection_start = None
         self.selection_rect = None
@@ -190,6 +191,10 @@ class MaskEditorApp:
         self.mask_only_btn = ttk.Button(action_frame, text="Show Mask Only", command=self.toggle_mask_only)
         self.mask_only_btn.pack(side=tk.LEFT, padx=5)
         
+        # Add "Show Image Only" button
+        self.image_only_btn = ttk.Button(action_frame, text="Show Image Only", command=self.toggle_image_only)
+        self.image_only_btn.pack(side=tk.LEFT, padx=5)
+        
         # Undo/Redo
         history_frame = ttk.LabelFrame(toolbar, text="History", padding="5")
         history_frame.pack(side=tk.RIGHT, padx=5, pady=5)
@@ -340,86 +345,6 @@ class MaskEditorApp:
             self.mask_path = path
             self.status_label.config(text=f"Saved mask to: {os.path.basename(path)}")
     
-    # def update_display(self):
-    #     """
-    #     Update the display with the current image and mask overlay.
-    #     Scale the image to fit the window while maintaining aspect ratio.
-    #     """
-    #     if self.original_image is None or self.mask_image is None:
-    #         return
-        
-    #     # Prevent recursive calls
-    #     if hasattr(self, '_updating_display') and self._updating_display:
-    #         return
-    #     self._updating_display = True
-        
-    #     # Create a colored mask for overlay (using dark blue for better visibility)
-    #     colored_mask = np.zeros_like(self.original_image)
-    #     colored_mask[self.mask_image == 255] = [0, 0, 180]  # Dark blue for white regions
-        
-    #     # Create display image with overlay
-    #     self.display_image = cv2.addWeighted(
-    #         self.original_image, 1.0, 
-    #         colored_mask, self.overlay_alpha, 
-    #         0
-    #     )
-        
-    #     # Convert to PIL format
-    #     pil_image = Image.fromarray(self.display_image)
-        
-    #     # Get canvas dimensions
-    #     canvas_width = self.canvas.winfo_width()
-    #     canvas_height = self.canvas.winfo_height()
-        
-    #     # Ensure canvas has proper dimensions
-    #     if canvas_width <= 1 or canvas_height <= 1:
-    #         canvas_width = self.root.winfo_width() - 40  # Adjust for padding
-    #         canvas_height = self.root.winfo_height() - 200  # Adjust for toolbar and statusbar
-        
-    #     # Calculate scaling to fit window while maintaining aspect ratio
-    #     img_width, img_height = pil_image.size
-    #     width_ratio = canvas_width / img_width
-    #     height_ratio = canvas_height / img_height
-        
-    #     # Use the smaller ratio to ensure the image fits entirely
-    #     display_scale = min(width_ratio, height_ratio)
-        
-    #     # Apply zoom factor
-    #     display_scale *= self.scale
-        
-    #     # Calculate new dimensions
-    #     new_width = int(img_width * display_scale)
-    #     new_height = int(img_height * display_scale)
-        
-    #     # Resize the image for display only (not affecting original)
-    #     if new_width > 0 and new_height > 0:
-    #         display_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
-            
-    #         # Update canvas
-    #         self.photo_image = ImageTk.PhotoImage(display_image)
-    #         self.canvas.itemconfig(self.image_container, image=self.photo_image)
-            
-    #         # Center the image in the canvas
-    #         canvas_width = self.canvas.winfo_width()
-    #         canvas_height = self.canvas.winfo_height()
-    #         x_pos = max(0, (canvas_width - new_width) // 2)
-    #         y_pos = max(0, (canvas_height - new_height) // 2)
-    #         self.canvas.coords(self.image_container, x_pos, y_pos)
-            
-    #         # Store display scale for coordinate conversions
-    #         self.display_scale = display_scale
-            
-    #         # Store display position for coordinate conversions
-    #         self.display_offset_x = x_pos
-    #         self.display_offset_y = y_pos
-            
-    #         # Update selections if we're not already in the middle of updating them
-    #         if not hasattr(self, '_updating_selections') or not self._updating_selections:
-    #             self.update_selections_after_zoom()
-        
-    #     # Clear the flag
-    #     self._updating_display = False
-    
     def update_display(self):
         """
         Update the display with the current image and mask overlay.
@@ -446,6 +371,9 @@ class MaskEditorApp:
             self.display_image = np.where(self.mask_image[..., np.newaxis] == 255, 
                                         colored_mask, 
                                         white_background)
+        elif self.show_image_only:
+            self.display_image = self.original_image.copy()
+        
         else:
             # Normal overlay mode
             # Create a colored mask for overlay (using dark blue for better visibility)
@@ -515,6 +443,25 @@ class MaskEditorApp:
         # Clear the flag
         self._updating_display = False
         
+    def toggle_image_only(self):
+        """Toggle between normal view and image-only view."""
+        self.show_image_only = not self.show_image_only
+
+        # Make sure both flags are not active at the same time
+        if self.show_image_only:
+            self.show_mask_only = False
+            self.mask_only_btn.config(text="Show Mask Only")
+
+        # Update button text and status
+        if self.show_image_only:
+            self.image_only_btn.config(text="Show Overlay")
+            self.status_label.config(text="Showing image only")
+        else:
+            self.image_only_btn.config(text="Show Image Only")
+            self.status_label.config(text="Showing overlay")
+
+        self.update_display()
+    
     
     # Add this new method to handle the mask-only toggle
     def toggle_mask_only(self):
