@@ -78,6 +78,10 @@ class MaskEditorApp:
         # Window resize binding
         self.root.bind("<Configure>", self.on_window_resize)
         
+        self.root.bind("<Escape>", self.escape_pressed)
+        
+        self.root.focus_set()
+        
         # Setup initial state
         self.status_label.config(text="Ready. Load an image and mask to begin.")
     
@@ -134,6 +138,76 @@ class MaskEditorApp:
         
         self.root.config(menu=menubar)
     
+    def validate_brush_size_entry(self, event=None):
+        """Validate and update brush size from entry widget."""
+        try:
+            value = self.brush_size_var.get()
+            # Ensure value is within valid range
+            if value < 1:
+                value = 1
+            elif value > 50:
+                value = 50
+            
+            # Update the variable (this will also update the slider)
+            self.brush_size_var.set(value)
+            self.brush_size = value
+            
+            # Update cursor if the mouse is over the canvas
+            self.update_cursor(None)
+            
+        except tk.TclError:
+            # If invalid input, reset to current brush size
+            self.brush_size_var.set(self.brush_size)
+    
+    def escape_pressed(self, event=None):
+        """Handle Escape key press to deselect active functionality."""
+        # Clear any selection
+        self.clear_selection()
+        
+        # Clear polygon selection
+        self.clear_polygon_selection()
+        
+        # Reset tool to brush if needed
+        if self.current_tool in ["select", "polygon"]:
+            self.current_tool = "brush"
+            self.tool_var.set("brush")
+        
+        # Clear any temporary drawing states
+        self.is_drawing = False
+        
+        # Remove temporary line if exists
+        if hasattr(self, 'temp_line') and self.temp_line:
+            self.canvas.delete(self.temp_line)
+            self.temp_line = None
+        
+        # Remove cursor indicator
+        if self.cursor_indicator:
+            self.canvas.delete(self.cursor_indicator)
+            self.cursor_indicator = None
+        
+        self.status_label.config(text="Selection cleared. Ready for editing.")
+    
+    def update_status_display(self):
+        """Update the status bar to show current image and mask file names."""
+        status_parts = []
+        
+        if self.image_path:
+            status_parts.append(f"Image: {os.path.basename(self.image_path)}")
+        
+        if self.mask_path:
+            status_parts.append(f"Mask: {os.path.basename(self.mask_path)}")
+        
+        if not status_parts:
+            status_text = "Ready. Load an image and mask to begin."
+        else:
+            status_text = " | ".join(status_parts)
+        
+        self.status_label.config(text=status_text)
+    
+    
+    
+    
+    
     def create_toolbar(self):
         """Create the toolbar with various editing tools and options."""
         # Main toolbar frame
@@ -159,14 +233,42 @@ class MaskEditorApp:
         brush_frame = ttk.LabelFrame(toolbar, text="Brush Settings", padding="5")
         brush_frame.pack(side=tk.LEFT, padx=5, pady=5)
         
+        # ttk.Label(brush_frame, text="Size:").pack(side=tk.LEFT, padx=5)
+        # self.brush_size_var = tk.IntVar(value=10)
+        # brush_slider = ttk.Scale(brush_frame, from_=1, to=50, variable=self.brush_size_var, 
+        #                         orient=tk.HORIZONTAL, length=100,
+        #                         command=self.update_brush_size)
+        # brush_slider.pack(side=tk.LEFT, padx=5)
+        
+        # ttk.Label(brush_frame, textvariable=self.brush_size_var).pack(side=tk.LEFT, padx=5)
+        
+        
         ttk.Label(brush_frame, text="Size:").pack(side=tk.LEFT, padx=5)
+
+        # Create frame for slider and entry
+        size_control_frame = ttk.Frame(brush_frame)
+        size_control_frame.pack(side=tk.LEFT, padx=5)
+
+        # IntVar to ensure integer values only
         self.brush_size_var = tk.IntVar(value=10)
-        brush_slider = ttk.Scale(brush_frame, from_=1, to=50, variable=self.brush_size_var, 
+
+        # Scale widget with integer resolution
+        brush_slider = ttk.Scale(size_control_frame, from_=1, to=50, 
+                                variable=self.brush_size_var, 
                                 orient=tk.HORIZONTAL, length=100,
                                 command=self.update_brush_size)
-        brush_slider.pack(side=tk.LEFT, padx=5)
+        brush_slider.pack(side=tk.TOP)
+
+        # Entry widget for direct input
+        size_entry_frame = ttk.Frame(size_control_frame)
+        size_entry_frame.pack(side=tk.TOP, pady=2)
+
+        self.size_entry = ttk.Entry(size_entry_frame, textvariable=self.brush_size_var, width=5)
+        self.size_entry.pack(side=tk.LEFT)
+        self.size_entry.bind('<Return>', self.validate_brush_size_entry)
+        self.size_entry.bind('<FocusOut>', self.validate_brush_size_entry)
         
-        ttk.Label(brush_frame, textvariable=self.brush_size_var).pack(side=tk.LEFT, padx=5)
+        
         
         # Brush color
         color_frame = ttk.LabelFrame(toolbar, text="Draw Color", padding="5")
@@ -266,8 +368,10 @@ class MaskEditorApp:
             if self.mask_image is None or self.mask_image.shape[:2] != self.original_image.shape[:2]:
                 self.mask_image = np.zeros((self.original_image.shape[0], self.original_image.shape[1]), dtype=np.uint8)
             
+            # self.status_label.config(text=f"Loaded image: {os.path.basename(path)}")
+            
             self.update_display()
-            self.status_label.config(text=f"Loaded image: {os.path.basename(path)}")
+            self.update_status_display()
     
     def open_mask(self):
         """

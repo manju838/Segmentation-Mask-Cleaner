@@ -89,6 +89,9 @@ def main():
                 print(f"Loaded image: {os.path.basename(image_path)}")
                 if len(sys.argv) > 2 and app.mask_image is not None:
                     print(f"Loaded mask: {os.path.basename(mask_path)}")
+                
+                # Update the status display to show loaded files (extra line)
+                app.update_status_display()
     
     # Run the application main loop
     root.mainloop()

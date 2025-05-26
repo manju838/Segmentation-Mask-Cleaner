@@ -6,10 +6,10 @@ TODOs:
 
 1) Bugs/Modifications in Mask Cleaner code
 <br>[] The image and the mask selected should be displayed all the times on status bar, else getting confused about what to save the cleaned mask as.    
-<br>[] Brush Settings size should be only integers
+<br>[x] ~~Brush Settings size should be accept integers for brushsize~~
 <br>[] Polygon created using "Polygon Select" is not transforming with mouse scroll
 <br>[] Need a method to identify files and masks without loading them seperately for each image
-<br>[] Escape btn to deselect any functionality
+<br>[x] ~~Escape btn to deselect any functionality~~
 <br>[] Once I move to a different image, the functionality that is active should become inactive, for eg, if Polygon Select is active, after I save and move to a different image, this should be deactivated and the polygon should vanish. 
 
 Erraneous errors in terminal even though app is functioning:<br>
