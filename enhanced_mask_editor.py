@@ -521,7 +521,6 @@ class MaskEditorApp:
         
         self.status_label.config(text=status_text)
 
-    # Include essential methods from original implementation
     def validate_brush_size_entry(self, event=None):
         """Validate and update brush size from entry widget."""
         try:
@@ -804,6 +803,76 @@ class MaskEditorApp:
                 canvas_x + brush_radius, canvas_y + brush_radius,
                 outline="#444444", width=1, fill="#444444", stipple="gray50"
             )
+        elif self.current_tool == "polygon":
+            # Check if hovering over a vertex
+            self.hover_vertex = None
+            for i, (px, py) in enumerate(self.polygon_points):
+                if abs(canvas_x - px) < 15 and abs(canvas_y - py) < 15:
+                    self.hover_vertex = i
+                    
+                    # Highlight the vertex
+                    self.canvas.itemconfig(
+                        self.polygon_vertices[i],
+                        fill="yellow",
+                        outline="yellow"
+                    )
+                else:
+                    # Reset vertex appearance if it was previously highlighted
+                    if i < len(self.polygon_vertices):
+                        self.canvas.itemconfig(
+                            self.polygon_vertices[i], 
+                            fill="red" if i > 0 else "green",
+                            outline="white"
+                        )
+            
+            # Check if hovering near the first point (for closing)
+            if len(self.polygon_points) >= 3 and not self.polygon_closed:
+                first_x, first_y = self.polygon_points[0]
+                distance = ((canvas_x - first_x)**2 + (canvas_y - first_y)**2)**0.5
+                
+                if distance < 20:  # Detection radius for closing
+                    # Highlight first point to indicate closing is possible
+                    self.canvas.itemconfig(
+                        self.polygon_vertices[0],
+                        fill="yellow",
+                        outline="black",
+                        width=2
+                    )
+                    
+                    # Add temporary indicator to show potential closing action
+                    if not hasattr(self, 'close_indicator') or not self.close_indicator:
+                        self.close_indicator = self.canvas.create_text(
+                            first_x, first_y - 15,
+                            text="Click to close",
+                            fill="white",
+                            font=('Arial', 8)
+                        )
+                    
+                    # Change cursor to indicate closing action
+                    self.canvas.config(cursor="hand2")
+                    
+                    self.close_option_active = True  # Set flag to indicate closing option is active
+                else:
+                    # Reset first vertex appearance
+                    if len(self.polygon_vertices) > 0:
+                        self.canvas.itemconfig(
+                            self.polygon_vertices[0],
+                            fill="green",
+                            outline="white",
+                            width=1
+                        )
+                    
+                    # Remove temporary closing indicator
+                    if hasattr(self, 'close_indicator') and self.close_indicator:
+                        self.canvas.delete(self.close_indicator)
+                        self.close_indicator = None
+                    
+                    # Reset cursor
+                    self.canvas.config(cursor="crosshair")
+                    self.close_option_active = False  # Reset flag
+            else:
+                # Default polygon cursor
+                self.canvas.config(cursor="crosshair")
         elif self.current_tool == "select":
             self.canvas.config(cursor="crosshair")
         else:
@@ -877,8 +946,34 @@ class MaskEditorApp:
         self.save_undo_state()
         
         kernel = np.ones((kernel_size, kernel_size), np.uint8)
-        self.mask_image = cv2.morphologyEx(self.mask_image, cv2.MORPH_OPEN, kernel)
-        self.mask_image = cv2.morphologyEx(self.mask_image, cv2.MORPH_CLOSE, kernel)
+        
+        # If we have a selection, only clean that area
+        if self.selected_region is not None:
+            x, y, w, h = self.selected_region
+            
+            # Extract region
+            region = self.mask_image[y:y+h, x:x+w].copy()
+            
+            # Apply operations
+            region = cv2.morphologyEx(region, cv2.MORPH_OPEN, kernel)
+            region = cv2.morphologyEx(region, cv2.MORPH_CLOSE, kernel)
+            
+            # Put region back
+            self.mask_image[y:y+h, x:x+w] = region
+        elif self.polygon_region is not None:
+            # Create a copy of the mask
+            mask_copy = self.mask_image.copy()
+            
+            # Apply morphological operations to the entire mask
+            cleaned_mask = cv2.morphologyEx(mask_copy, cv2.MORPH_OPEN, kernel)
+            cleaned_mask = cv2.morphologyEx(cleaned_mask, cv2.MORPH_CLOSE, kernel)
+            
+            # Apply the changes only within the polygon region
+            self.mask_image = np.where(self.polygon_region > 0, cleaned_mask, self.mask_image)
+        else:
+            # Clean entire mask
+            self.mask_image = cv2.morphologyEx(self.mask_image, cv2.MORPH_OPEN, kernel)
+            self.mask_image = cv2.morphologyEx(self.mask_image, cv2.MORPH_CLOSE, kernel)
         
         self.update_display()
         self.status_label.config(text=f"Cleaned noise with kernel size {kernel_size}")
@@ -887,35 +982,64 @@ class MaskEditorApp:
         """Fill the selected region with the currently selected color."""
         color = self.brush_color_var.get()
         
+        # Check if we have a rectangle selection
         if self.selected_region is not None:
             self.save_undo_state()
             x, y, w, h = self.selected_region
             
-            if color == 255:
+            # Create a mask to only fill white pixels in the selection
+            if color == 255:  # If filling with white, target black pixels
                 target_mask = (self.mask_image[y:y+h, x:x+w] == 0)
-            else:
+            else:  # If filling with black, target white pixels
                 target_mask = (self.mask_image[y:y+h, x:x+w] == 255)
             
+            # Apply the fill only to targeted pixels
             region = self.mask_image[y:y+h, x:x+w].copy()
             region[target_mask] = color
             self.mask_image[y:y+h, x:x+w] = region
             
             self.update_display()
             self.status_label.config(text=f"Selection filled with {color}")
+        
+        # Check if we have a polygon selection
+        elif self.polygon_region is not None:
+            self.save_undo_state()
+            
+            # Apply the color to the masked area
+            if color == 255:  # White
+                self.mask_image[self.polygon_region == 255] = 255
+            else:  # Black
+                self.mask_image[self.polygon_region == 255] = 0
+            
+            self.update_display()
+            self.status_label.config(text=f"Polygon area filled with {color}")
         else:
-            messagebox.showinfo("Information", "No selection to fill. Please use Select tool first.")
+            messagebox.showinfo("Information", "No selection to fill. Please use Select or Polygon Select first.")
 
     def delete_selection(self):
         """Delete the mask content in the selected region."""
+        # Check if we have a rectangle selection
         if self.selected_region is not None:
             self.save_undo_state()
             x, y, w, h = self.selected_region
+            
+            # Set the selected region to black (0)
             self.mask_image[y:y+h, x:x+w] = 0
             
             self.update_display()
             self.status_label.config(text="Selection deleted")
+        
+        # Check if we have a polygon selection
+        elif self.polygon_region is not None:
+            self.save_undo_state()
+            
+            # Delete the mask content in the polygon area
+            self.mask_image[self.polygon_region == 255] = 0
+            
+            self.update_display()
+            self.status_label.config(text="Polygon area deleted")
         else:
-            messagebox.showinfo("Information", "No selection to delete. Please use Select tool first.")
+            messagebox.showinfo("Information", "No selection to delete. Please use Select or Polygon Select first.")
 
     def clear_selection(self):
         """Clears the current selection."""
@@ -934,20 +1058,454 @@ class MaskEditorApp:
             self.root.after(100, self.update_display)
 
     def update_selections_after_zoom(self):
-        """Update selection visuals after zooming."""
-        pass  # Simplified for brevity
+        """Update selection visuals after zooming or resizing."""
+        # Prevent recursive calls
+        if hasattr(self, '_updating_selections') and self._updating_selections:
+            return
+        self._updating_selections = True
+        
+        # Update rectangle selection if active
+        if self.selection_rect and self.selection_start and self.selected_region:
+            x, y, w, h = self.selected_region
+            start_x, start_y = x, y
+            end_x, end_y = x + w, y + h
+            
+            # Convert to display coordinates
+            display_start_x, display_start_y = self.image_to_display_coords(start_x, start_y)
+            display_end_x, display_end_y = self.image_to_display_coords(end_x, end_y)
+            
+            # Update rectangle coords
+            self.canvas.coords(
+                self.selection_rect,
+                display_start_x, display_start_y, display_end_x, display_end_y
+            )
+        
+        # Update polygon selection if active
+        if self.polygon_points and len(self.polygon_lines) > 0:
+            # Store the original points in image coordinates before applying zoom
+            image_points = []
+            for point in self.polygon_points:
+                image_points.append(self.display_to_image_coords(point[0], point[1]))
+            
+            # Convert image coordinates back to new display coordinates after zoom
+            updated_points = []
+            for img_x, img_y in image_points:
+                disp_x, disp_y = self.image_to_display_coords(img_x, img_y)
+                updated_points.append((disp_x, disp_y))
+            
+            # Update lines
+            for i, line_id in enumerate(self.polygon_lines):
+                start_idx = i
+                end_idx = (i + 1) % len(updated_points)
+                
+                start_x, start_y = updated_points[start_idx]
+                end_x, end_y = updated_points[end_idx]
+                
+                self.canvas.coords(line_id, start_x, start_y, end_x, end_y)
+            
+            # Update vertices
+            for i, vertex_id in enumerate(self.polygon_vertices):
+                x, y = updated_points[i]
+                self.canvas.coords(
+                    vertex_id,
+                    x - 5, y - 5,
+                    x + 5, y + 5
+                )
+            
+            # Update polygon points with new display coordinates
+            self.polygon_points = updated_points
+            
+            # If the polygon is closed, update the selection mask without triggering display update
+            if self.polygon_closed and not hasattr(self, '_highlighting') or not self._highlighting:
+                self.polygon_region = self.create_polygon_mask()
+            
+            # Update close indicator if it exists
+            if hasattr(self, 'close_indicator') and self.close_indicator:
+                if len(self.polygon_points) > 0:
+                    first_x, first_y = self.polygon_points[0]
+                    self.canvas.coords(self.close_indicator, first_x, first_y - 15)
+        
+        # Clear the flag
+        self._updating_selections = False
+
+    def display_to_image_coords(self, display_x, display_y):
+        """Convert display coordinates to image coordinates."""
+        # Account for image position in canvas
+        adjusted_x = display_x - self.display_offset_x
+        adjusted_y = display_y - self.display_offset_y
+        
+        # Convert from display scale to image scale
+        image_x = int(adjusted_x / self.display_scale)
+        image_y = int(adjusted_y / self.display_scale)
+        
+        # Ensure coordinates are within image bounds
+        if self.mask_image is not None:
+            image_x = max(0, min(image_x, self.mask_image.shape[1] - 1))
+            image_y = max(0, min(image_y, self.mask_image.shape[0] - 1))
+        
+        return (image_x, image_y)
+
+    def image_to_display_coords(self, image_x, image_y):
+        """Convert image coordinates to display coordinates."""
+        # Convert from image scale to display scale
+        display_x = int(image_x * self.display_scale) + self.display_offset_x
+        display_y = int(image_y * self.display_scale) + self.display_offset_y
+        
+        return (display_x, display_y)
+
+    def create_vertex_marker(self, x, y, is_first=False):
+        """Create a visual marker for a polygon vertex."""
+        # Use a different color for the first point
+        fill_color = "green" if is_first else "red"
+        
+        # Create a small circle as the vertex marker
+        vertex_id = self.canvas.create_oval(
+            x - 5, y - 5,
+            x + 5, y + 5,
+            fill=fill_color,
+            outline="white",
+            tags="vertex"
+        )
+        
+        return vertex_id
+
+    def create_polygon_mask(self):
+        """Create a binary mask from the current polygon selection."""
+        if len(self.polygon_points) < 3:
+            return None
+        
+        # Create a blank mask of the same size as the image
+        polygon_mask = np.zeros_like(self.mask_image)
+        
+        # Convert display coordinates to image coordinates
+        image_points = []
+        for point in self.polygon_points:
+            x, y = self.display_to_image_coords(point[0], point[1])
+            image_points.append([x, y])
+        
+        # Fill the polygon area in the mask
+        pts = np.array(image_points, np.int32)
+        pts = pts.reshape((-1, 1, 2))
+        cv2.fillPoly(polygon_mask, [pts], 255)
+        
+        return polygon_mask
+
+    def highlight_polygon_selection(self):
+        """Highlight the polygon selection area."""
+        # Prevent recursion
+        if hasattr(self, '_highlighting') and self._highlighting:
+            return
+        self._highlighting = True
+        
+        # Create a mask for the polygon
+        self.polygon_region = self.create_polygon_mask()
+        
+        # Update display only if not already updating
+        if not hasattr(self, '_updating_display') or not self._updating_display:
+            self.update_display()
+        
+        self.status_label.config(text="Polygon selection complete. Use Fill or Delete to modify.")
+        
+        # Clear flag
+        self._highlighting = False
 
     def on_mouse_down(self, event):
         """Handle mouse button press events."""
-        pass  # Simplified for brevity
+        if self.original_image is None or self.mask_image is None:
+            return
+        
+        # Get canvas coordinates
+        canvas_x = self.canvas.canvasx(event.x)
+        canvas_y = self.canvas.canvasy(event.y)
+        
+        # Check if click is within the image
+        if canvas_x < self.display_offset_x or canvas_y < self.display_offset_y or \
+        canvas_x >= self.display_offset_x + self.photo_image.width() or \
+        canvas_y >= self.display_offset_y + self.photo_image.height():
+            return
+        
+        # Convert to image coordinates
+        image_x, image_y = self.display_to_image_coords(canvas_x, canvas_y)
+        
+        self.is_drawing = True
+        self.last_x, self.last_y = image_x, image_y
+        
+        if self.current_tool == "brush":
+            self.save_undo_state()
+            self.draw_brush(image_x, image_y)
+            self.update_display()
+        elif self.current_tool == "select":
+            self.selection_start = (image_x, image_y)
+            
+            # Clear previous selection
+            if self.selection_rect:
+                self.canvas.delete(self.selection_rect)
+            
+            # Start new selection rect
+            display_x, display_y = self.image_to_display_coords(image_x, image_y)
+            self.selection_rect = self.canvas.create_rectangle(
+                display_x, display_y, display_x, display_y,
+                outline='yellow', width=2, dash=(4, 4)
+            )
+        elif self.current_tool == "line":
+            self.save_undo_state()
+            # Start a new line
+            self.line_start = (image_x, image_y)
+            
+            # Create a temporary line on the canvas for visual feedback
+            display_x, display_y = self.image_to_display_coords(image_x, image_y)
+            self.temp_line = self.canvas.create_line(
+                display_x, display_y, display_x, display_y,
+                fill='yellow', width=2
+            )
+        elif self.current_tool == "polygon":
+            # Check if we're trying to close the polygon
+            if len(self.polygon_points) >= 3 and not self.polygon_closed:
+                first_x, first_y = self.polygon_points[0]
+                distance = ((canvas_x - first_x)**2 + (canvas_y - first_y)**2)**0.5
+                
+                if distance < 20:  # Direct distance check
+                    # Close the polygon
+                    last_pt = self.polygon_points[-1]
+                    first_pt = self.polygon_points[0]
+                    
+                    # Create the closing line
+                    line_id = self.canvas.create_line(
+                        last_pt[0], last_pt[1], 
+                        first_pt[0], first_pt[1],
+                        fill="yellow", width=2
+                    )
+                    self.polygon_lines.append(line_id)
+                    self.polygon_closed = True
+                    
+                    # Create the mask for the polygon region
+                    self.polygon_region = self.create_polygon_mask()
+                    
+                    # Update status
+                    self.status_label.config(text="Polygon closed. Use Fill/Delete to modify the selected area.")
+                    
+                    # Clean up closing indicator
+                    if hasattr(self, 'close_indicator') and self.close_indicator:
+                        self.canvas.delete(self.close_indicator)
+                        self.close_indicator = None
+                    
+                    # Remove temporary line if it exists
+                    if self.temp_line:
+                        self.canvas.delete(self.temp_line)
+                        self.temp_line = None
+                    
+                    return  # Exit after closing the polygon
+            
+            # Check if clicking on an existing vertex for dragging
+            if self.hover_vertex is not None:
+                self.active_vertex = self.hover_vertex
+                return
+            
+            # If the polygon is closed, start a new one
+            if self.polygon_closed:
+                self.clear_polygon_selection()
+            
+            # Add a new point
+            self.polygon_points.append((canvas_x, canvas_y))
+            
+            # Add a vertex marker
+            is_first = len(self.polygon_points) == 1
+            vertex_id = self.create_vertex_marker(canvas_x, canvas_y, is_first)
+            self.polygon_vertices.append(vertex_id)
+            
+            # If this is the first point, no line to draw yet
+            if len(self.polygon_points) > 1:
+                # Draw line from previous point to this point
+                last_x, last_y = self.polygon_points[-2]
+                line_id = self.canvas.create_line(
+                    last_x, last_y, canvas_x, canvas_y,
+                    fill="yellow", width=2
+                )
+                self.polygon_lines.append(line_id)
+                
+            # Remove temporary line if it exists
+            if self.temp_line:
+                self.canvas.delete(self.temp_line)
+                self.temp_line = None
+                
+            # If we have at least 3 points, check if we can close the polygon
+            if len(self.polygon_points) >= 3:
+                self.update_cursor(event)  # Update to check for closing option
 
     def on_mouse_move(self, event):
         """Handle mouse movement events."""
-        pass  # Simplified for brevity
+        if self.original_image is None or self.mask_image is None:
+            return
+        
+        # Get canvas coordinates
+        canvas_x = self.canvas.canvasx(event.x)
+        canvas_y = self.canvas.canvasy(event.y)
+        
+        # Update coordinates display
+        self.coords_label.config(text=f"Canvas: {int(canvas_x)},{int(canvas_y)}")
+        
+        # Update cursor
+        self.update_cursor(event)
+        
+        # If not drawing, exit
+        if not self.is_drawing:
+            # If we're in polygon mode and have at least one point, show temporary line
+            if self.current_tool == "polygon" and self.polygon_points and not self.polygon_closed:
+                if self.temp_line:
+                    self.canvas.delete(self.temp_line)
+                
+                last_x, last_y = self.polygon_points[-1]
+                self.temp_line = self.canvas.create_line(
+                    last_x, last_y, canvas_x, canvas_y,
+                    fill="yellow", width=2, dash=(4, 4)
+                )
+            return
+        
+        # Check if coordinates are within image bounds
+        if canvas_x < self.display_offset_x or canvas_y < self.display_offset_y or \
+           canvas_x >= self.display_offset_x + self.photo_image.width() or \
+           canvas_y >= self.display_offset_y + self.photo_image.height():
+            return
+        
+        # Convert to image coordinates
+        image_x, image_y = self.display_to_image_coords(canvas_x, canvas_y)
+        
+        if self.current_tool == "brush":
+            self.draw_line(self.last_x, self.last_y, image_x, image_y)
+            self.last_x, self.last_y = image_x, image_y
+            self.update_display()
+        elif self.current_tool == "select" and self.selection_start:
+            # Update selection rectangle
+            start_x, start_y = self.selection_start
+            
+            # Update selection rectangle on canvas
+            display_start_x, display_start_y = self.image_to_display_coords(start_x, start_y)
+            display_curr_x, display_curr_y = self.image_to_display_coords(image_x, image_y)
+            
+            self.canvas.coords(
+                self.selection_rect,
+                display_start_x, display_start_y, display_curr_x, display_curr_y
+            )
+        elif self.current_tool == "line" and hasattr(self, 'line_start'):
+            # Update temporary line
+            start_x, start_y = self.line_start
+            display_start_x, display_start_y = self.image_to_display_coords(start_x, start_y)
+            display_curr_x, display_curr_y = self.image_to_display_coords(image_x, image_y)
+            
+            self.canvas.coords(
+                self.temp_line,
+                display_start_x, display_start_y, display_curr_x, display_curr_y
+            )
+        elif self.current_tool == "polygon" and self.active_vertex is not None:
+            # Drag the active vertex
+            self.polygon_points[self.active_vertex] = (canvas_x, canvas_y)
+            
+            # Update vertex marker
+            if self.active_vertex < len(self.polygon_vertices):
+                self.canvas.coords(
+                    self.polygon_vertices[self.active_vertex],
+                    canvas_x - 5, canvas_y - 5,
+                    canvas_x + 5, canvas_y + 5
+                )
+            
+            # Update connected lines
+            if len(self.polygon_points) > 1:
+                # Update line before the vertex
+                prev_idx = (self.active_vertex - 1) % len(self.polygon_points)
+                prev_x, prev_y = self.polygon_points[prev_idx]
+                
+                if self.active_vertex > 0 or self.polygon_closed:
+                    line_idx = prev_idx if self.polygon_closed else self.active_vertex - 1
+                    if line_idx < len(self.polygon_lines) and line_idx >= 0:
+                        self.canvas.coords(
+                            self.polygon_lines[line_idx],
+                            prev_x, prev_y, canvas_x, canvas_y
+                        )
+                
+                # Update line after the vertex
+                next_idx = (self.active_vertex + 1) % len(self.polygon_points)
+                
+                if next_idx != self.active_vertex and (self.active_vertex < len(self.polygon_points) - 1 or self.polygon_closed):
+                    line_idx = self.active_vertex
+                    if line_idx < len(self.polygon_lines):
+                        next_x, next_y = self.polygon_points[next_idx]
+                        self.canvas.coords(
+                            self.polygon_lines[line_idx],
+                            canvas_x, canvas_y, next_x, next_y
+                        )
+            
+            # If polygon is closed, update the selection mask
+            if self.polygon_closed:
+                self.polygon_region = self.create_polygon_mask()
 
     def on_mouse_up(self, event):
         """Handle mouse button release events."""
-        pass  # Simplified for brevity
+        if not self.is_drawing:
+            return
+        
+        self.is_drawing = False
+        
+        # Get canvas coordinates
+        canvas_x = self.canvas.canvasx(event.x)
+        canvas_y = self.canvas.canvasy(event.y)
+        
+        # Convert to image coordinates
+        image_x, image_y = self.display_to_image_coords(canvas_x, canvas_y)
+        
+        if self.current_tool == "select" and self.selection_start:
+            # Calculate rectangle in image coordinates
+            start_x, start_y = self.selection_start
+            
+            # Make sure coordinates are within image bounds
+            start_x = max(0, min(start_x, self.mask_image.shape[1] - 1))
+            start_y = max(0, min(start_y, self.mask_image.shape[0] - 1))
+            end_x = max(0, min(image_x, self.mask_image.shape[1] - 1))
+            end_y = max(0, min(image_y, self.mask_image.shape[0] - 1))
+            
+            # Ensure start is the top-left and end is the bottom-right
+            left = min(start_x, end_x)
+            top = min(start_y, end_y)
+            right = max(start_x, end_x)
+            bottom = max(start_y, end_y)
+            
+            # Store the selection region (x, y, width, height)
+            self.selected_region = (left, top, right - left, bottom - top)
+            
+            # Highlight white pixels in the selection
+            self.highlight_selection()
+            
+            self.status_label.config(text=f"Selected region: {self.selected_region}")
+        elif self.current_tool == "line" and hasattr(self, 'line_start'):
+            # Draw permanent line on the mask
+            start_x, start_y = self.line_start
+            self.draw_line(start_x, start_y, image_x, image_y)
+            
+            # Remove temporary line
+            self.canvas.delete(self.temp_line)
+            delattr(self, 'line_start')
+            delattr(self, 'temp_line')
+            
+            self.update_display()
+        elif self.current_tool == "polygon":
+            # Release the active vertex if dragging
+            self.active_vertex = None
+            
+            # If the polygon is closed, update the mask
+            if self.polygon_closed:
+                self.polygon_region = self.create_polygon_mask()
+
+    def highlight_selection(self):
+        """Highlight the white pixels in the current selection."""
+        if self.selected_region is None:
+            return
+        
+        # Get the selection region
+        x, y, w, h = self.selected_region
+        
+        # Create a visual highlight in the display
+        # This is done in the update_display method by using a different overlay
+        # We'll update the display to show the highlight
+        self.update_display()
 
     def on_mouse_wheel(self, event):
         """Handle mouse wheel events for zooming."""
@@ -955,6 +1513,26 @@ class MaskEditorApp:
             self.zoom(1.1)
         elif event.num == 5 or event.delta < 0:
             self.zoom(0.9)
+
+    def draw_brush(self, x, y):
+        """Draw a filled circle at the specified coordinates."""
+        cv2.circle(
+            self.mask_image, 
+            (x, y), 
+            self.brush_size, 
+            self.brush_color_var.get(), 
+            -1
+        )
+
+    def draw_line(self, x1, y1, x2, y2):
+        """Draw a line between the specified coordinates."""
+        cv2.line(
+            self.mask_image, 
+            (x1, y1), 
+            (x2, y2), 
+            self.brush_color_var.get(), 
+            self.brush_size
+        )
 
     def show_instructions(self):
         """Display instructions for using the tool."""
@@ -976,7 +1554,14 @@ TOOLS:
 - Brush: Draw on the mask with selected color and size
 - Line: Draw straight lines
 - Select: Select rectangular regions
-- Polygon Select: Create polygon selections
+- Polygon Select: Create polygon selections by clicking points
+
+POLYGON SELECTION:
+- Click to add points to create a polygon
+- Close the polygon by clicking near the first point
+- Drag vertices to adjust the polygon shape
+- Use Fill/Delete to modify the selected area
+- Press Escape to clear selection
 
 WORKFLOW:
 1. File > Setup Folders to configure directories
@@ -1005,6 +1590,7 @@ NEW FEATURES:
 - Progress tracking and navigation
 - Auto-save functionality
 - Keyboard shortcuts for navigation
+- Full polygon selection support
 
 Perfect for editing large batches of masks generated by SAM2 or other segmentation models.
 

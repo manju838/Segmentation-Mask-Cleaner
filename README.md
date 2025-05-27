@@ -2,6 +2,10 @@
 
 This tool expects an image and a binary segmentation mask as input and helps clean up any islands or noise in the segmentation mask.
 
+enhanced version of codes expects image folder, original mask folder and an empty output folder and the cleaned mask can be saved in this output folder.
+Normal version is the previous version with bugs/readme fixed
+
+
 TODOs:
 
 1) Bugs/Modifications in Mask Cleaner code
@@ -10,6 +14,8 @@ TODOs:
 <br>[] Polygon created using "Polygon Select" is not transforming with mouse scroll
 <br>[] Need a method to identify files and masks without loading them seperately for each image
 <br>[x] ~~Escape btn to deselect any functionality~~
+<br>[] Escape btn resets any functionality to Brush option
+<br>[] Auto browsing for images, masks and auto saving like in labelme
 <br>[] Once I move to a different image, the functionality that is active should become inactive, for eg, if Polygon Select is active, after I save and move to a different image, this should be deactivated and the polygon should vanish. 
 
 Erraneous errors in terminal even though app is functioning:<br>
